@@ -1,0 +1,21 @@
+{
+  "name": "scout-spin-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "mock": "tsx mock-api/server.ts",
+    "demo": "tsx mock-api/demo.ts",
+    "typecheck": "tsc --noEmit",
+    "build": "echo 'Spin build plumbing: run `spin new http-ts scout-spin-worker` and copy src/ + spin.toml over (see README).' && exit 1"
+  },
+  "dependencies": {
+    "itty-router": "^5.0.18",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

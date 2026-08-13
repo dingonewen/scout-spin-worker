@@ -1,0 +1,31 @@
+spin_manifest_version = 2
+
+[application]
+name = "scout-spin-worker"
+version = "0.1.0"
+authors = ["scout-spin-worker"]
+description = "Spin prototype: email in → ticket API call out (scenarios #1 #2 #3 #9 #10)"
+
+[[trigger.http]]
+route = "/..."
+component = "scout-spin-worker"
+
+[component.scout-spin-worker]
+source = "target/scout-spin-worker.wasm"
+exclude_files = ["**/node_modules"]
+# Outbound allow-list: the LLM endpoint and the ticket API. Default API points
+# at the local mock (localhost:8787); point it at the real Fastify API for the
+# A/B run. `http://self.alt` is Spin's intra-app pseudo-host (unused here but
+# harmless to allow).
+allowed_outbound_hosts = [
+  "https://api.deepseek.com",
+  "https://api.openai.com",
+  "http://localhost:8787",
+  "http://self.alt"
+]
+
+# Bootstrap the build pipeline with `spin new http-ts` (see README — the exact
+# webpack/j2w invocation is SDK-version-sensitive). All business logic under
+# src/ is Spin-free and runs unchanged once the template's build wires it.
+[component.scout-spin-worker.build]
+command = "npm run build"
