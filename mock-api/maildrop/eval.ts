@@ -66,7 +66,11 @@ function buildEvalContext(parsed: MaildropParsed): {
     to: [{ email: email.to ?? "scout@demo.example" }],
     cc: [],
     receivedAt: email.receivedAt ?? null,
-    direction: "inbound",
+    // A po_creation email is the buyer sending a NEW PO — outbound, not a
+    // supplier reply. The regex fallback keys po_creation on direction, so
+    // leaving this inbound (as the harness originally did) silently shadows
+    // every scenario-01 email into full_acknowledgement.
+    direction: isNewPo ? "outbound" : "inbound",
     attachments: [],
     inboxUserId: "user-1",
     inboxProvider: "cloudflare",
