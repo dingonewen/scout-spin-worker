@@ -42,20 +42,25 @@ export const PurchaseOrderSchema = z.object({
  * authoritative case context — the worker never asserts a poId the API does
  * not re-derive.
  */
+// `.default(...)` only fills a *missing* (`undefined`) key — but LLMs often
+// emit an explicit `null` for the object/array fields they'd rather omit
+// (`payload` in particular). Coerce `null` → the default so one stray null
+// doesn't fail the whole envelope. `kind` / `reason` / `confidence` stay
+// strict: they are required and the prompt always asks for them.
 export const EnvelopeDecisionSchema = z.object({
   kind: z.string().min(1),
   poId: z.string().nullable().default(null),
   poCode: z.string().nullable().default(null),
   supplierCode: z.string().nullable().default(null),
-  affectedPoCodes: z.array(z.string()).default([]),
+  affectedPoCodes: z.preprocess((value) => value ?? [], z.array(z.string())),
   confidence: z.number().min(0).max(1),
   reason: z.string().min(1),
   supplierName: z.string().nullable().default(null),
-  affectedPartCodes: z.array(z.string()).default([]),
+  affectedPartCodes: z.preprocess((value) => value ?? [], z.array(z.string())),
   rejectionReason: z.string().nullable().default(null),
-  modifications: z.array(ModificationSchema).default([]),
+  modifications: z.preprocess((value) => value ?? [], z.array(ModificationSchema)),
   purchaseOrder: PurchaseOrderSchema.nullable().default(null),
-  payload: z.record(z.string(), z.unknown()).default({}),
+  payload: z.preprocess((value) => value ?? {}, z.record(z.string(), z.unknown())),
 });
 
 export type EnvelopeDecision = z.infer<typeof EnvelopeDecisionSchema>;
