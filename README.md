@@ -46,8 +46,8 @@ src/
 │  └─ channel.ts          # channelForMessage
 ├─ classifier/
 │  ├─ interface.ts        # Classifier (swappable)
-│  ├─ prompt.ts           # classification prompt (5 kinds)
-│  ├─ llm.ts              # direct-LLM impl (OpenAI-compatible, temperature 0)
+│  ├─ prompt.ts           # classification prompt (15 kinds) + PO-extraction prompt
+│  ├─ llm.ts              # direct-LLM impl (OpenAI-compatible, temperature 0) + PO extraction
 │  ├─ prefilter.ts        # deterministic no_ticket / whole_po_rejection fast path
 │  ├─ local.ts            # decideTicketLocally — SOR's regex fallback + ASN/NDR extractors
 │  ├─ normalize.ts        # normalizeTicketDecision (PO header safety gate)
