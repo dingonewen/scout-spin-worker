@@ -63,6 +63,27 @@ mock-api/
 All business logic is Spin-free and runs under plain `tsx`. `src/index.ts` is
 the only file that references Spin globals (`addEventListener("fetch")`).
 
+## Configuration
+
+There is **no dotenv** — the code never reads a `.env` file. `src/config.ts`
+reads `process.env` directly under plain Node (the mock, demo, and eval
+scripts), and the same values come from `spin.toml` `[variables]` / Fermyon
+Cloud when running under Spin. `.env.example` is a reference sheet only, not
+auto-loaded; set the variables inline or source it:
+
+```bash
+LLM_API_KEY=sk-... npm run eval -- ../maildrop/generator/output   # inline
+set -a; . ./.env.example; set +a                                  # source all
+```
+
+| variable | default | notes |
+|---|---|---|
+| `LLM_API_KEY` | *(empty)* | required to run the live classifier (eval / A/B) |
+| `LLM_BASE_URL` | `https://api.deepseek.com` | any OpenAI-compatible endpoint |
+| `LLM_MODEL` | `deepseek-chat` | |
+| `TICKET_API_URL` | `http://localhost:8787` | local mock; point at the real Fastify API for the A/B run |
+| `TICKET_API_KEY` | `dev-key` | org `x-api-key` sent to the ticket API |
+
 ## Run the mock + demo (no Spin, no LLM key)
 
 ```bash
