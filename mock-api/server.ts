@@ -46,7 +46,7 @@ function ingest(envelope: unknown): IngestEnvelopeResponse {
   return {
     txid: `tx_${randomUUID()}`,
     outcomes,
-    ticketIds: outcomes.map((o) => o.ticketId).filter((id): id is string => Boolean(id)),
+    ticketIds: outcomes.flatMap((o) => (o.ticketId ? [o.ticketId] : [])),
   };
 }
 

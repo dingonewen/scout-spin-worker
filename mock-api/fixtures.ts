@@ -1,6 +1,7 @@
 import type { EnvelopeDecision } from "../src/contract/envelope";
 import type { ScoutCaseContext, ScoutMessage, ScoutPurchaseOrder, ScoutSupplierContact } from "../src/contract/scout-context";
 import type { InboundEmail } from "../src/core/pipeline";
+import type { ScenarioKey } from "../src/scenarios";
 
 // ---------------------------------------------------------------------------
 // Seed fixtures: one org, one thread, one open PO, and six inbound emails that
@@ -59,7 +60,7 @@ function decision(kind: string, overrides: Partial<EnvelopeDecision> = {}): Enve
 }
 
 export type SeedCase = {
-  scenario: number; // 0 = noise, else the ticket-scenarios number
+  scenario: 0 | ScenarioKey; // 0 = noise, else the ticket-scenarios number
   label: string;
   email: InboundEmail;
   expected: EnvelopeDecision;

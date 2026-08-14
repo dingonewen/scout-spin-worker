@@ -1,4 +1,4 @@
-import type { EnvelopeDecision } from "../contract/envelope";
+import { EnvelopeDecisionSchema, type EnvelopeDecision } from "../contract/envelope";
 import type { ClassifyInput } from "./interface";
 
 // ---------------------------------------------------------------------------
@@ -22,11 +22,11 @@ export function prefilterDecisions(input: ClassifyInput): EnvelopeDecision[] | n
   // Clearly non-procurement traffic (bounced/auto replies, signatures, etc.)
   // with no PO reference and no procurement vocabulary → no_ticket.
   if (!PROCUREMENT_SIGNAL.test(text) && input.context.purchaseOrders.length === 0) {
-    return [{
+    return [EnvelopeDecisionSchema.parse({
       kind: "no_ticket",
       confidence: 1,
       reason: "No procurement signal and no purchase orders on file; routed to no_ticket by the deterministic prefilter.",
-    }];
+    })];
   }
 
   return null; // defer to the LLM

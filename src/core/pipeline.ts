@@ -75,6 +75,7 @@ export async function runTicketPipeline(
   const envelope: TicketEventEnvelope = {
     providerEventId: email.messageId,
     channel,
+    erpEventIds: [],
     decisions,
   };
 
