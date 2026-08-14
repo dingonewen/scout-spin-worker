@@ -81,9 +81,13 @@ HTTP adapter (`POST /`).
 
 ## Test with a maildrop (.eml) corpus
 
-maildrop emits the raw RFC822/MIME wire format — many `.eml` files plus a JSON.
-The JSON is the ML training labels; this harness ignores it and reads the
-ground-truth `kind` from the first token of each email's `X-Labels` header.
+maildrop emits the raw RFC822/MIME wire format — many `.eml` files (newer
+versions also write a `manifest.json`, but that is only a generation report).
+The ground-truth `kind` comes from the **filename**: `scenario-NN` maps onto
+the boss's scenario number, hence onto `SCENARIO_KIND` (`01`→po_creation,
+`02`→full_acknowledgement, `03`→partial_acknowledgement, `09`→line_exception,
+`10`→asn). Older output that still carries `X-Labels`/`X-Po`/`X-Scenario`
+headers is honoured as an override.
 
 ```bash
 npm run eval:dry -- path/to/maildrop            # parse-only: print kind/po/labels/body, no LLM
@@ -93,22 +97,24 @@ npm run eval -- path/to/maildrop                # classify + score (needs LLM_AP
 
 `mock-api/maildrop/adapter.ts` hand-parses the MIME (RFC2047 subject, multipart
 boundaries, quoted-printable/base64) with zero deps and turns each `.eml` into
-the `InboundEmail` the pipeline consumes. It also normalizes two test artifacts:
-maildrop's scenario #9 label `exception_with_counter` is mapped to SOR's ticket
-kind `line_exception`, and the generator's `[Scout Test … #N]` subject prefix +
-`Scout Test Case — …` body banner are stripped so the classifier isn't handed
-the answer. `eval.ts` runs the `LlmClassifier` directly (not the full pipeline)
-and scores the emitted `kind` against the normalized `X-Labels[0]`.
+the `InboundEmail` the pipeline consumes. It derives the ground-truth `kind`
+from the filename (falling back to the older `X-Labels` header, where scenario
+#9's `exception_with_counter` is mapped to `line_exception`), scrapes the
+`PO-XXXXXXX` code out of the subject/body, and strips the older generator's
+`[Scout Test … #N]` subject prefix + `Scout Test Case — …` body banner so the
+classifier isn't handed the answer. `eval.ts` runs the `LlmClassifier` directly
+(not the full pipeline) and scores the emitted `kind` against that derived
+ground truth.
 
 Two deliberate scope cuts:
 
 - **No org/thread.** maildrop emails carry no org, so every email gets a fixed
   demo org and `threadId = messageId`; the org/thread resolver (layer 2) is out
   of scope for a classification eval.
-- **Line-level correctness is not scored.** `X-Labels` gives a kind but not the
-  expected part codes, so the eval builds a single synthetic PO (empty for
-  `po_creation`, since a new PO is not on file yet) and leaves `lines` empty.
-  Scoring `affectedPartCodes` / `modifications` would need the maildrop JSON.
+- **Line-level correctness is not scored.** The scenario number gives a kind but
+  not the expected part codes, so the eval builds a single synthetic PO (empty
+  for `po_creation`, since a new PO is not on file yet) and leaves `lines` empty.
+  Scoring `affectedPartCodes` / `modifications` would need the line-level labels.
 
 ## Run under Spin
 

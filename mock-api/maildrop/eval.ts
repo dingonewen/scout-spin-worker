@@ -155,7 +155,7 @@ async function main(): Promise<void> {
 
   const parsedList: Array<{ file: string; parsed: MaildropParsed }> = [];
   for (const file of files) {
-    parsedList.push({ file, parsed: parseEml(await readFile(join(dir, file), "utf8")) });
+    parsedList.push({ file, parsed: parseEml(await readFile(join(dir, file), "utf8"), { filename: file }) });
   }
 
   console.log(`maildrop: ${parsedList.length} email(s) in ${dir}\n`);

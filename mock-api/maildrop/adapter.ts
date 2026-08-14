@@ -17,6 +17,7 @@
 import { Buffer } from "node:buffer";
 import { TextDecoder } from "node:util";
 import type { InboundEmail } from "../../src/core/pipeline";
+import { SCENARIO_KIND, type ScenarioKey } from "../../src/scenarios";
 
 export type MaildropGroundTruth = {
   /** X-Scenario (e.g. "scenario-01"). */
@@ -50,6 +51,13 @@ export type ParseEmlOptions = {
    * into the classifier (inflating the A/B score).
    */
   stripScaffolding?: boolean;
+  /**
+   * Basename of the source .eml (e.g. "scenario-01-00.eml"). Newer maildrop
+   * versions emit clean .eml files — no X-* headers, no sidecar label JSON —
+   * so the scenario number is read back out of the filename and mapped to the
+   * SOR kind via SCENARIO_KIND. Ignored whenever the X-* headers are present.
+   */
+  filename?: string;
 };
 
 // maildrop's ML label for scenario #9 is "exception_with_counter"; SOR's
@@ -58,6 +66,31 @@ export type ParseEmlOptions = {
 const MAILDROP_KIND_ALIASES: Record<string, string> = {
   exception_with_counter: "line_exception",
 };
+
+// The new generator drops the X-* headers entirely; its filenames
+// ("scenario-01-00.eml") are the only ground-truth label left. The scenario
+// numbers are the boss's scenario numbers, which map 1:1 onto SCENARIO_KIND.
+function filenameGroundTruth(
+  filename: string | undefined,
+): { scenario: string | null; index: string | null } {
+  if (!filename) return { scenario: null, index: null };
+  const match = filename.match(/(scenario-\d{2})-(\d{2})/);
+  if (!match) return { scenario: null, index: null };
+  return { scenario: match[1] ?? null, index: String(Number(match[2])) };
+}
+
+function kindFromScenario(scenario: string | null): string | null {
+  if (!scenario) return null;
+  const match = scenario.match(/scenario-(\d{2})/);
+  if (!match) return null;
+  const num = Number(match[1]);
+  return num in SCENARIO_KIND ? SCENARIO_KIND[num as ScenarioKey] : null;
+}
+
+function extractPoCode(text: string): string | null {
+  const match = text.match(/\bPO-[A-Z0-9]{3,}\b/i);
+  return match ? match[0].toUpperCase() : null;
+}
 
 type Headers = Map<string, string>;
 
@@ -84,17 +117,32 @@ export function parseEml(raw: string, options: ParseEmlOptions = {}): MaildropPa
     receivedAt: headers.get("date") ?? undefined,
   };
 
+  // Ground truth, two sources:
+  //  1. X-* headers — the OLD generator embedded scenario/index/po/labels
+  //     directly in the .eml.
+  //  2. filename — the NEW generator emits clean .eml files (no X-*, no sidecar
+  //     label JSON), so the scenario number is read back out of the basename and
+  //     the PO code is scraped from the subject/body.
   const labels = (headers.get("x-labels") ?? "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+  const fromFilename = filenameGroundTruth(options.filename);
+
+  const scenario = headers.get("x-scenario") ?? fromFilename.scenario;
+  const index = headers.get("x-index") ?? fromFilename.index;
+  const poCode =
+    headers.get("x-po") ?? extractPoCode(rawSubject) ?? extractPoCode(rawBody);
+
+  let kind: string | null = labels[0] ? (MAILDROP_KIND_ALIASES[labels[0]] ?? labels[0]) : null;
+  if (!kind) kind = kindFromScenario(scenario);
 
   const groundTruth: MaildropGroundTruth = {
-    scenario: headers.get("x-scenario") ?? null,
-    index: headers.get("x-index") ?? null,
-    poCode: headers.get("x-po") ?? null,
+    scenario,
+    index,
+    poCode,
     labels,
-    kind: labels[0] ? (MAILDROP_KIND_ALIASES[labels[0]] ?? labels[0]) : null,
+    kind,
   };
 
   return { email, groundTruth };
