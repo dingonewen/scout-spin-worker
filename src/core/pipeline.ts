@@ -3,6 +3,7 @@ import type { IngestEnvelopeResponse } from "../contract/ingest";
 import type { ScoutCaseContext } from "../contract/scout-context";
 import type { TicketApiClient } from "../api-client";
 import type { Classifier } from "../classifier/interface";
+import { normalizeTicketDecision } from "../classifier/normalize";
 import { prefilterDecisions } from "../classifier/prefilter";
 import { channelForMessage } from "./channel";
 
@@ -43,9 +44,10 @@ export type PipelineResult = {
  *   1. load case context      (tickets.scoutCaseContext)
  *   2. locate current message
  *   3. derive channel
- *   4. deterministic prefilter (no_ticket fast path only)
- *   5. LLM classify           → EnvelopeDecision[]
- *   6. POST the envelope      (tickets.ingestEnvelope)  ← the only write
+ *   4. deterministic prefilter (no_ticket / inbound whole_po_rejection)
+ *   5. classify               → EnvelopeDecision[]
+ *   6. normalize identifiers  (PO header safety gate, SOR parity)
+ *   7. POST the envelope      (tickets.ingestEnvelope)  ← the only write
  *
  * The worker deliberately does NOT resolve scopes, build proposals, or dedup —
  * all of that is the API's job, inside its own transaction.
@@ -71,6 +73,7 @@ export async function runTicketPipeline(
   if (decisions === null) {
     decisions = await deps.classifier.classify({ context, currentMessage, channel });
   }
+  decisions = decisions.map((decision) => normalizeTicketDecision(decision, context));
 
   const envelope: TicketEventEnvelope = {
     providerEventId: email.messageId,

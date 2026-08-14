@@ -48,7 +48,11 @@ src/
 │  ├─ interface.ts        # Classifier (swappable)
 │  ├─ prompt.ts           # classification prompt (5 kinds)
 │  ├─ llm.ts              # direct-LLM impl (OpenAI-compatible, temperature 0)
-│  └─ prefilter.ts        # deterministic no_ticket fast path
+│  ├─ prefilter.ts        # deterministic no_ticket / whole_po_rejection fast path
+│  ├─ local.ts            # decideTicketLocally — SOR's regex fallback + ASN/NDR extractors
+│  ├─ normalize.ts        # normalizeTicketDecision (PO header safety gate)
+│  ├─ local-classifier.ts # LocalClassifier — the LLM-less baseline behind Classifier
+│  └─ text.ts             # findPoCode / findPartCodes / hasProcurementSignal
 ├─ api-client.ts          # TicketApiClient (scoutCaseContext + ingestEnvelope)
 └─ scenarios.ts           # the 5-scenario contract + assertions
 mock-api/
@@ -114,6 +118,7 @@ headers is honoured as an override.
 npm run eval:dry -- path/to/maildrop            # parse-only: print kind/po/labels/body, no LLM
 npm run eval:dry -- path/to/maildrop --limit 5  # first N files only
 npm run eval -- path/to/maildrop                # classify + score (needs LLM_API_KEY)
+npm run eval -- path/to/maildrop --local        # deterministic baseline (no key; SOR's regex fallback)
 ```
 
 `mock-api/maildrop/adapter.ts` hand-parses the MIME (RFC2047 subject, multipart

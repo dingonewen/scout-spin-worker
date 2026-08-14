@@ -9,13 +9,20 @@
 //
 // Usage:
 //   tsx mock-api/maildrop/eval.ts <dir>              # classify (needs LLM_API_KEY)
+//   tsx mock-api/maildrop/eval.ts <dir> --local      # deterministic baseline (no key)
 //   tsx mock-api/maildrop/eval.ts <dir> --dry-run    # just parse + print, no LLM
 //   tsx mock-api/maildrop/eval.ts <dir> --limit 5    # only the first N files
 //   MAILDROP_DIR=<dir> tsx mock-api/maildrop/eval.ts
+//
+// `--local` swaps in LocalClassifier — SOR's decideTicketLocally regex
+// fallback — so the A/B harness can score the LLM-less baseline on the same
+// corpus. Expect it to trail the LLM on the hard cases: the regex fallback is
+// deliberately conservative and routes ambiguous reads to triage.
 // ---------------------------------------------------------------------------
 
 import { readdir, readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
+import { LocalClassifier } from "../../src/classifier/local-classifier";
 import { LlmClassifier } from "../../src/classifier/llm";
 import { loadConfig } from "../../src/config";
 import type {
@@ -124,6 +131,7 @@ function actualKind(decisions: Array<{ kind: string }>): string {
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const dryRun = args.includes("--dry-run");
+  const local = args.includes("--local");
 
   let limit: number | undefined;
   const positional: string[] = [];
@@ -176,12 +184,16 @@ async function main(): Promise<void> {
     return;
   }
 
-  const config = loadConfig();
-  if (!config.llm.apiKey) {
-    console.error("LLM_API_KEY is not set. Set it to classify, or rerun with --dry-run to just parse.");
-    process.exit(1);
-  }
-  const classifier = new LlmClassifier(config.llm);
+  const classifier = local
+    ? new LocalClassifier()
+    : (() => {
+        const config = loadConfig();
+        if (!config.llm.apiKey) {
+          console.error("LLM_API_KEY is not set. Set it to classify, or rerun with --dry-run to just parse or --local for the deterministic baseline.");
+          process.exit(1);
+        }
+        return new LlmClassifier(config.llm);
+      })();
 
   let correct = 0;
   const rows: Array<{ file: string; expected: string; actual: string; po: string | null; ok: boolean }> = [];

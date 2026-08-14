@@ -1,33 +1,28 @@
-import { EnvelopeDecisionSchema, type EnvelopeDecision } from "../contract/envelope";
+import type { EnvelopeDecision } from "../contract/envelope";
 import type { ClassifyInput } from "./interface";
+import { decideTicketLocally } from "./local";
 
 // ---------------------------------------------------------------------------
-// Deterministic prefilter — the cheap fast path that only ever emits
-// no_ticket, and only when it is confident. Anything ambiguous returns null
-// so the LLM stays the authority.
+// Deterministic prefilter — the cheap fast path that only short-circuits the
+// outcomes that are SAFE to decide without the LLM:
 //
-// This is a deliberate MINIMAL port. The SOR worker also carries a ~600-line
-// regex fallback (decideTicketLocally) and dedicated ASN/NDR extractors in
-// ticket-agent.ts; port those for full offline parity if the A/B needs the
-// LLM-less baseline. Do not let this prefilter emit a *positive* classification
-// — a wrong no_ticket is cheap to fix, a wrong po_creation is not.
+//   - no_ticket: clearly non-procurement traffic (a wrong no_ticket is cheap
+//     to fix, a wrong po_creation is not).
+//   - whole_po_rejection on an inbound supplier message: an explicit,
+//     unambiguous rejection is a direct business fact that stale PO/line state
+//     must not let the model reinterpret as an acknowledgement.
+//
+// Everything else returns null and the LLM stays the authority. This mirrors
+// SOR's decideTicketEnvelope short-circuits, which call decideTicketLocally and
+// only take its verdict for those two kinds — the remaining local reads
+// (partial ack, line_exception, asn, …) are computed but discarded in favour of
+// the contextual agent. The no-API-key fallback is the same local classifier
+// surfaced explicitly as LocalClassifier (local-classifier.ts).
 // ---------------------------------------------------------------------------
-
-const PROCUREMENT_SIGNAL =
-  /\b(po[-\s#:]?[a-z0-9][a-z0-9-]{2,}|purchase order|acknowledge|acknowledged|shipped|shipment|asn|tracking|exception|counter|reject|need[- ]by|delivery)\b/i;
 
 export function prefilterDecisions(input: ClassifyInput): EnvelopeDecision[] | null {
-  const text = `${input.currentMessage.subject}\n${input.currentMessage.bodyText ?? ""}`;
-
-  // Clearly non-procurement traffic (bounced/auto replies, signatures, etc.)
-  // with no PO reference and no procurement vocabulary → no_ticket.
-  if (!PROCUREMENT_SIGNAL.test(text) && input.context.purchaseOrders.length === 0) {
-    return [EnvelopeDecisionSchema.parse({
-      kind: "no_ticket",
-      confidence: 1,
-      reason: "No procurement signal and no purchase orders on file; routed to no_ticket by the deterministic prefilter.",
-    })];
-  }
-
+  const local = decideTicketLocally(input.context, input.currentMessage);
+  if (local.kind === "no_ticket") return [local];
+  if (local.kind === "whole_po_rejection" && input.currentMessage.direction === "inbound") return [local];
   return null; // defer to the LLM
 }
