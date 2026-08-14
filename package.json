@@ -6,6 +6,8 @@
   "scripts": {
     "mock": "tsx mock-api/server.ts",
     "demo": "tsx mock-api/demo.ts",
+    "eval": "tsx mock-api/maildrop/eval.ts",
+    "eval:dry": "tsx mock-api/maildrop/eval.ts --dry-run",
     "typecheck": "tsc --noEmit",
     "build": "echo 'Spin build plumbing: run `spin new http-ts scout-spin-worker` and copy src/ + spin.toml over (see README).' && exit 1"
   },
