@@ -1,12 +1,11 @@
 // ---------------------------------------------------------------------------
-// Runtime config. One accessor so the runtime-specific mechanism is a single
-// change, not a sprawl:
-//
-//   - Plain Node (the mock + demo run via `tsx`): reads `process.env`.
-//   - Spin (`spin up`): the component's variables come from `[variables]` /
-//     `[component.*.variables]` in spin.toml and are surfaced through the SDK's
-//     variables API (see the http-ts template's `src/spin.ts` for the symbol
-//     your SDK version re-exports). `process.env` is NOT populated under Spin.
+// Runtime config. This accessor reads `process.env` only — it is the source
+// for the plain-Node path (the mock/demo/eval scripts run via `tsx`). Under
+// Spin, `process.env` is NOT populated, so `src/index.ts` (the Spin entry)
+// overlays the same five values from `[component.*.variables]` via
+// `@spinframework/spin-variables` `get(key)`. Keeping the Spin-specific
+// mechanism out of this module means the tsx scripts never resolve the
+// `fermyon:spin/variables` WIT import.
 //
 // Everything has a safe local-dev default so the pipeline runs against the
 // mock with zero configuration; only the live-LLM key is required.

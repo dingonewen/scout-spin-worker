@@ -11,7 +11,7 @@ route = "/..."
 component = "scout-spin-worker"
 
 [component.scout-spin-worker]
-source = "target/scout-spin-worker.wasm"
+source = "dist/scout-spin-worker.wasm"
 exclude_files = ["**/node_modules"]
 # Outbound allow-list: the LLM endpoint and the ticket API. Default API points
 # at the local mock (localhost:8787); point it at the real Fastify API for the
@@ -24,8 +24,13 @@ allowed_outbound_hosts = [
   "http://self.alt"
 ]
 
-# Bootstrap the build pipeline with `spin new http-ts` (see README — the exact
-# webpack/j2w invocation is SDK-version-sensitive). All business logic under
-# src/ is Spin-free and runs unchanged once the template's build wires it.
 [component.scout-spin-worker.build]
-command = "npm run build"
+command = ["npm install", "npm run build"]
+watch = ["src/**/*.ts"]
+
+[component.scout-spin-worker.variables]
+llm_api_key = "test-llm-key-123"
+llm_base_url = "https://api.deepseek.com"
+llm_model = "deepseek-chat"
+ticket_api_url = "http://localhost:8787"
+ticket_api_key = "dev-key"

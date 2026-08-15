@@ -9,14 +9,19 @@
     "eval": "tsx mock-api/maildrop/eval.ts",
     "eval:dry": "tsx mock-api/maildrop/eval.ts --dry-run",
     "typecheck": "tsc --noEmit",
-    "build": "echo 'Spin build plumbing: run `spin new http-ts scout-spin-worker` and copy src/ + spin.toml over (see README).' && exit 1"
+    "build": "node build.mjs",
+    "build:debug": "node build.mjs --debug"
   },
   "dependencies": {
+    "@spinframework/spin-variables": "^1.0.1",
+    "@spinframework/wasi-http-proxy": "^2.0.0",
     "itty-router": "^5.0.18",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@bytecodealliance/jco": "^1.17.6",
     "@types/node": "^22.10.2",
+    "esbuild": "^0.25.8",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }

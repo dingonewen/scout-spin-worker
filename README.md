@@ -36,7 +36,7 @@ does not provide — another reason dedup must live in the API.
 ```
 src/
 ├─ index.ts               # Spin HTTP adapter (thin shell; the only Spin file)
-├─ config.ts              # env/variable accessor (Node env vs Spin variables)
+├─ config.ts              # process.env accessor (Spin [variables] overlaid in index.ts)
 ├─ contract/
 │  ├─ envelope.ts         # EnvelopeDecision + TicketEventEnvelope schemas (re-declared)
 │  ├─ scout-context.ts    # ScoutCaseContext shape
@@ -71,22 +71,24 @@ the only file that references Spin globals (`addEventListener("fetch")`).
 
 There is **no dotenv** — the code never reads a `.env` file. `src/config.ts`
 reads `process.env` directly under plain Node (the mock, demo, and eval
-scripts), and the same values come from `spin.toml` `[variables]` / Fermyon
-Cloud when running under Spin. `.env.example` is a reference sheet only, not
-auto-loaded; set the variables inline or source it:
+scripts). Under Spin, `process.env` is **not** populated, so `src/index.ts`
+overlays the same five values from `spin.toml`
+`[component.scout-spin-worker.variables]` via `@spinframework/spin-variables`
+(`get(key)` → the `fermyon:spin/variables` WIT import). `.env.example` is a
+reference sheet only, not auto-loaded; set the variables inline or source it:
 
 ```bash
 LLM_API_KEY=sk-... npm run eval -- ../maildrop/generator/output   # inline
 set -a; . ./.env.example; set +a                                  # source all
 ```
 
-| variable | default | notes |
-|---|---|---|
-| `LLM_API_KEY` | *(empty)* | required to run the live classifier (eval / A/B) |
-| `LLM_BASE_URL` | `https://api.deepseek.com` | any OpenAI-compatible endpoint |
-| `LLM_MODEL` | `deepseek-chat` | |
-| `TICKET_API_URL` | `http://localhost:8787` | local mock; point at the real Fastify API for the A/B run |
-| `TICKET_API_KEY` | `dev-key` | org `x-api-key` sent to the ticket API |
+| variable (Node env) | Spin key (lowercase) | default | notes |
+|---|---|---|---|
+| `LLM_API_KEY` | `llm_api_key` | *(empty)* | required to run the live classifier (eval / A/B) |
+| `LLM_BASE_URL` | `llm_base_url` | `https://api.deepseek.com` | any OpenAI-compatible endpoint |
+| `LLM_MODEL` | `llm_model` | `deepseek-chat` | |
+| `TICKET_API_URL` | `ticket_api_url` | `http://localhost:8787` | local mock; point at the real Fastify API for the A/B run |
+| `TICKET_API_KEY` | `ticket_api_key` | `dev-key` | org `x-api-key` sent to the ticket API |
 
 ## Run the mock + demo (no Spin, no LLM key)
 
@@ -144,20 +146,32 @@ Two deliberate scope cuts:
 
 ## Run under Spin
 
-The contract/core/classifier code is Spin-agnostic, but the **build plumbing**
-(webpack → `j2w`/ComponentizeJS) is SDK-version-sensitive. Bootstrap it from the
-official template rather than trusting hand-written config:
+`npm run build` (invoked by `spin build`) bundles `src/` with esbuild and
+componentizes it into `dist/scout-spin-worker.wasm` via
+`@spinframework/build-tools`' `SpinEsbuildPlugin` (+ jco) — the same pipeline
+`spin new http-ts` scaffolds for SDK 4.x. `@spinframework/wasi-http-proxy` is a
+side-effect polyfill (it exports `{}`) whose peer dependency pulls in
+`build-tools`; `src/spin-globals.d.ts` declares the `addEventListener("fetch")`
+pair.
 
 ```bash
-spin templates install --git https://github.com/spinframework/spin-js-sdk --update
-spin new -t http-ts scout-spin-worker --accept-defaults
-# copy this repo's src/ + spin.toml over the generated scaffold
-spin build --up     # then POST an InboundEmail to http://localhost:3000/
+npm install          # once (pulls esbuild + jco + build-tools + spin-variables)
+spin build           # -> dist/scout-spin-worker.wasm
+spin up              # serves http://localhost:3000/ (wildcard route)
+curl http://localhost:3000/health    # -> {"ok":true}
+curl -X POST http://localhost:3000/ -H 'content-type: application/json' -d '<InboundEmail>'
 ```
 
-Facts verified against the Spin JS SDK docs: npm package `@fermyon/spin-sdk`,
-`allowed_outbound_hosts` gates outbound `fetch`, and `zod` is confirmed to work
-in the Spin JS runtime.
+Verified against Spin 4.0.2 / the `@spinframework` SDK (esbuild + ComponentizeJS):
+
+- `process.env` is **not** populated in the guest; config must come from
+  `[component.scout-spin-worker.variables]` (plain `name = "default"` strings —
+  the map form `{ default, required }` is application-level only and is not what
+  the component resolves). Read them with `@spinframework/spin-variables`
+  `get(key)`.
+- `allowed_outbound_hosts` gates outbound `fetch`; the LLM and ticket API hosts
+  are already allow-listed.
+- `zod` works in the Spin JS runtime (no Node APIs needed for schema parsing).
 
 ## A/B: what to measure vs the current worker
 
