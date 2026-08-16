@@ -14,6 +14,26 @@ Only scenarios **#1 (PO creation), #2 (full ack), #3 (partial ack), #9
 (line exception), #10 (ASN)** are handled. Anything else the classifier emits
 is out of scope (and, in the real API, downgrades to triage).
 
+## Status — the boss's contract is done
+
+| ask | state |
+|---|---|
+| handle the 5 scenarios (#1 #2 #3 #9 #10) | ✅ `npm run demo` runs email → `scoutCaseContext` → classify → `ingestEnvelope` → `{txid, outcomes}` — 6/6 including noise |
+| run it under Spin, call the ticket API | ✅ `spin build` → `dist/scout-spin-worker.wasm`; `spin up` serves `POST /`; verified on dev2 against a live LLM |
+| use Mastra if possible | ✅ aligned — with one honest caveat (below) |
+
+**Mastra caveat (say this plainly).** The Mastra *framework* cannot run inside
+Spin's WASM runtime — it is Node-heavy, and ComponentizeJS ships no Node compat
+layer. But classification quality comes from the **prompt + model + deterministic
+fallback**, not the framework, so the prototype reproduces SOR's Mastra
+`scoutAgent` behaviour with a direct-LLM call plus the same `decideTicketLocally`
+fallback. The 15-kind prompt, the fallback, `normalizeTicketDecision`, and the
+scope resolver are ported verbatim from
+`packages/email-worker/src/tickets/ticket-agent.ts`, so the Spin component is a
+faithful thin mirror of the real SOR classifier — not a toy. If Mastra-the-
+framework is required, it already runs in SOR's Node/Workers runtime; that is
+its home.
+
 ## Why this shape
 
 The current `packages/email-worker` loads case context, classifies, then calls
@@ -48,7 +68,7 @@ src/
 │  ├─ interface.ts        # Classifier (swappable)
 │  ├─ prompt.ts           # classification prompt (15 kinds) + PO-extraction prompt
 │  ├─ llm.ts              # direct-LLM impl (OpenAI-compatible, temperature 0) + PO extraction
-│  ├─ prefilter.ts        # deterministic no_ticket / whole_po_rejection fast path
+│  ├─ prefilter.ts        # deterministic fast path: outbound buyer guard, inbound rejection, no_ticket
 │  ├─ local.ts            # decideTicketLocally — SOR's regex fallback + ASN/NDR extractors
 │  ├─ normalize.ts        # normalizeTicketDecision (PO header safety gate)
 │  ├─ local-classifier.ts # LocalClassifier — the LLM-less baseline behind Classifier
@@ -196,15 +216,21 @@ acknowledged-line emails and scores it there.
 | ops footprint | Redis + PM2 + Bull Board + resident services | `spin up` / SpinKube / Fermyon Cloud |
 | classification F1 | Mastra `scoutAgent` (baseline) | direct-LLM vs baseline on the same fixtures |
 
-The swappable `Classifier` interface exists so a **Mastra-on-Spin spike** can be
-dropped in for the same A/B run without touching the pipeline.
+The swappable `Classifier` interface exists so the direct-LLM and deterministic
+paths can be scored against each other without touching the pipeline. (A
+Mastra-on-Spin spike is not viable — Mastra is Node-heavy and cannot run in
+Spin's WASM runtime; see the Status section.)
 
 ## Boundary notes (do not drift)
 
 - `src/contract/envelope.ts` is a **duplicate** of
   `packages/email-worker/src/tickets/event-envelope.ts`. Keep them in sync.
-- `tickets.ingestEnvelope` and `tickets.scoutCaseContext` do **not** exist in the
-  SOR API yet — they are the two procedures this prototype's boundary implies.
-  Wiring them is a follow-up on the SOR side (out of scope here).
+- `tickets.ingestEnvelope` and `tickets.scoutCaseContext` are the two API
+  procedures this prototype's boundary implies. The equivalent SOR logic already
+  exists as **internal email-worker functions** — `loadScoutCaseContext`
+  (`case-context.ts`) and `ingestEventEnvelope` (`ticket-ingestion.ts`) — but
+  they write to Postgres in-process and are not exposed as tRPC procedures on
+  `apps/api`. Exposing an API surface over them (so the worker calls the API,
+  not Postgres) is the one follow-up that remains on the SOR side.
 - The worker never resolves `poId` authoritatively — it sends `poCode`; the API
   re-derives scope server-side (tenancy rule #1).
