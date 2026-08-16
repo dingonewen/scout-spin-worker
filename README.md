@@ -168,10 +168,23 @@ Verified against Spin 4.0.2 / the `@spinframework` SDK (esbuild + ComponentizeJS
   `[component.scout-spin-worker.variables]` (plain `name = "default"` strings —
   the map form `{ default, required }` is application-level only and is not what
   the component resolves). Read them with `@spinframework/spin-variables`
-  `get(key)`.
+  `get(key)`. Runtime injection does **not** override these either: neither
+  `spin up --variable llm_api_key=...` nor `SPIN_VARIABLE_LLM_API_KEY=...`
+  reaches a component-level `[variables]` entry, so the real key must be set by
+  editing `spin.toml` (and restarting `spin up`). `git update-index
+  --skip-worktree spin.toml` keeps that local edit out of git.
 - `allowed_outbound_hosts` gates outbound `fetch`; the LLM and ticket API hosts
   are already allow-listed.
 - `zod` works in the Spin JS runtime (no Node APIs needed for schema parsing).
+
+Fixture caveat: POSTing the demo seeds to the Spin endpoint reproduces the
+mock's hardcoded demo PO, whose status is `pending_ack`. Under the live LLM,
+`seed-4-exception` therefore classifies as `pre_ack_modification` — a change to
+a PO line that hasn't been acknowledged yet — rather than `line_exception`
+(#9), which presupposes an already-acknowledged line. That is the LLM reasoning
+about PO state correctly, not a classifier bug; it only surfaces on the demo
+fixture. The maildrop eval exercises `line_exception` against real,
+acknowledged-line emails and scores it there.
 
 ## A/B: what to measure vs the current worker
 
